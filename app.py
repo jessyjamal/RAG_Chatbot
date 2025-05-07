@@ -5,7 +5,8 @@ from langdetect import detect
 
 app = Flask(__name__)
 
-HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct"
+# استخدمي النموذج الجديد هنا من Hugging Face
+HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
 HUGGINGFACE_TOKEN = os.environ.get("HF_TOKEN")
 
 headers = {
@@ -76,6 +77,7 @@ def chat():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
 
 
 
