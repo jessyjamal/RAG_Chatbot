@@ -6,7 +6,8 @@ from langdetect import detect
 app = Flask(__name__)
 
 # === Hugging Face setup ===
-HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/mistralai/Mixtral-8x7B-Instruct-v0.1"
+HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/openchat/openchat-3.5-0106"
+
 HUGGINGFACE_TOKEN = os.environ.get("HF_TOKEN")
 HF_HEADERS = {
     "Authorization": f"Bearer {HUGGINGFACE_TOKEN}",
