@@ -6,7 +6,8 @@ from langdetect import detect
 app = Flask(__name__)
 
 # ✅ Use the OpenChat model from Hugging Face
-HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/openchat/openchat-3.5-0106"
+HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1"
+
 HUGGINGFACE_TOKEN = os.environ.get("HF_TOKEN")  # Make sure the token is set in environment variables
 
 headers = {
