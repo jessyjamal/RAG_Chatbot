@@ -1,39 +1,25 @@
 import os
 from flask import Flask, request, jsonify
-from openai import OpenAI
-
-# Load GitHub PAT from environment variables (used on Railway)
-client = OpenAI(
-    base_url="https://api.github.ai/v1",
-    api_key=os.environ.get("GITHUB_TOKEN"),
-    default_headers={
-        "OpenAI-Organization": "github-models",
-        "publisher": "azure-openai"
-    }
-)
-
+import requests
 
 app = Flask(__name__)
 
-# Bot introduction message
+HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct"
+HUGGINGFACE_TOKEN = os.environ.get("HF_TOKEN")  # خزنيه في متغير بيئة
+
+headers = {
+    "Authorization": f"Bearer {HUGGINGFACE_TOKEN}"
+}
+
+# Bot intro
 BOT_INTRO = (
-    "Hello, I'm Tofy \U0001F44B\n"
+    "Hello, I'm Tofy 👋\n"
     "I'm here to help you find the best private or international university and college in Egypt based on your needs.\n"
     "You can ask me about tuition fees, programs, admission requirements, and more. Just type your question!"
 )
 
-# Keywords that indicate uncertainty
-UNCERTAIN_KEYWORDS = [
-    "i'm not sure", "i cannot", "i don't know", "there is no clear answer",
-    "it depends", "unfortunately", "i'm unable", "i cannot provide a specific answer"
-]
-
-# Memory store for user sessions
+# Session memory
 session_memory = {}
-
-# Detect if text contains Arabic characters
-def is_arabic(text):
-    return any('\u0600' <= ch <= '\u06FF' for ch in text)
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -47,40 +33,32 @@ def chat():
     if user_input.lower() in ["hi", "hello", "start", "who are you", "introduce yourself"]:
         return jsonify({"answer": BOT_INTRO})
 
-    # Initialize session if it doesn't exist
+    # Initialize session
     if user_id not in session_memory:
         session_memory[user_id] = []
 
-    # Add the user's message
-    session_memory[user_id].append({"role": "user", "content": user_input})
+    session_memory[user_id].append(f"User: {user_input}")
+    prompt = "\n".join(session_memory[user_id]) + "\nAssistant:"
 
     try:
-        # Call GitHub-hosted LLM model
-        response = client.chat.completions.create(
-            model="openai/o4-mini",  # Model format required by GitHub Marketplace
-            messages=session_memory[user_id]
+        response = requests.post(
+            HUGGINGFACE_API_URL,
+            headers=headers,
+            json={"inputs": prompt}
         )
 
-        answer = response.choices[0].message.content.strip()
+        if response.status_code != 200:
+            return jsonify({"error": f"Hugging Face error: {response.text}"}), 500
 
-        # Add assistant's reply to session
-        session_memory[user_id].append({"role": "assistant", "content": answer})
+        generated = response.json()[0]["generated_text"].split("Assistant:")[-1].strip()
+        session_memory[user_id].append(f"Assistant: {generated}")
 
-        # Handle uncertain answers
-        if any(keyword in answer.lower() for keyword in UNCERTAIN_KEYWORDS):
-            fallback = (
-                "\u0644\u0633\u0647 \u0628\u062a\u0639\u0644\u0645\u060c \u0641\u0645\u0634 \u0645\u062a\u0623\u0643\u062f \u0645\u0646 \u0627\u0644\u0625\u062c\u0627\u0628\u0629 \u062f\u064a. \u062c\u0631\u0651\u0628 \u062a\u0639\u064a\u062f \u0635\u064a\u0627\u063a\u0629 \u0633\u0624\u0627\u0644\u0643 \u0623\u0648 \u0634\u0648\u0641 \u0645\u0648\u0642\u0639 \u0627\u0644\u062c\u0627\u0645\u0639\u0629 \u0627\u0644\u0631\u0633\u0645\u064a."
-                if is_arabic(user_input)
-                else "I'm still learning, so I'm not completely sure about that. Please try rephrasing your question or check the official university website."
-            )
-            return jsonify({"answer": fallback})
-
-        return jsonify({"answer": answer})
-
+        return jsonify({"answer": generated})
     except Exception as e:
-        return jsonify({"error": "Connection error. Please check your token or GitHub model availability."}), 500
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
 
 
