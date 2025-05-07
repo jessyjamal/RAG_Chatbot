@@ -7,7 +7,6 @@ app = Flask(__name__)
 
 # === Hugging Face setup ===
 HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/openchat/openchat-3.5-0106"
-
 HUGGINGFACE_TOKEN = os.environ.get("HF_TOKEN")
 HF_HEADERS = {
     "Authorization": f"Bearer {HUGGINGFACE_TOKEN}",
@@ -15,7 +14,7 @@ HF_HEADERS = {
 }
 
 # === Gemini setup ===
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")  # set this in your environment
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
 
 # === Bot prompts ===
@@ -47,6 +46,7 @@ def chat():
     except:
         lang = "en"
 
+    # === Greetings ===
     if user_input.lower() in ["hi", "hello", "start", "who are you", "introduce yourself", "ابدأ", "مرحبا", "من أنت"]:
         return jsonify({"answer": BOT_INTRO.get(lang, BOT_INTRO["en"])})
 
@@ -55,6 +55,7 @@ def chat():
 
     session_memory[user_id].append(f"User: {user_input}")
     prompt = "\n".join(session_memory[user_id]) + "\nAssistant:"
+    print("🔍 Prompt to HF:\n", prompt)
 
     generated = None
 
@@ -67,6 +68,8 @@ def chat():
             timeout=20
         )
         hf_json = hf_response.json()
+        print("🤖 HF JSON:", hf_json)
+
         hf_output = hf_json[0]["generated_text"]
         if "Assistant:" in hf_output:
             generated = hf_output.split("Assistant:")[-1].strip()
@@ -77,7 +80,7 @@ def chat():
             raise Exception("Empty response from Hugging Face")
 
     except Exception as e:
-        print("⚠️ HF error:", e)
+        print("⚠️ Hugging Face error:", e)
 
     # === Step 2: Gemini fallback ===
     if not generated and GEMINI_API_KEY:
@@ -89,6 +92,7 @@ def chat():
                 timeout=20
             )
             gemini_json = gemini_response.json()
+            print("💠 Gemini JSON:", gemini_json)
             generated = gemini_json["candidates"][0]["content"]["parts"][0]["text"]
         except Exception as e:
             print("⚠️ Gemini error:", e)
@@ -106,13 +110,3 @@ def chat():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
-
-
-
-
-
-
-
-
-
