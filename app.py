@@ -1,12 +1,9 @@
 import os
 from flask import Flask, request, jsonify
-import google.generativeai as genai
+import openai
 
-# Configure Gemini API key
-genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
-
-# Initialize Gemini model
-model = genai.GenerativeModel("models/gemini-1.5-pro")
+# Configure OpenAI API key
+openai.api_key = os.environ.get("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")
 
 app = Flask(__name__)
 
@@ -45,19 +42,24 @@ def chat():
 
     # Initialize session history if not exists
     if user_id not in session_memory:
-        session_memory[user_id] = []
+        session_memory[user_id] = [
+            {"role": "system", "content": "You are an educational assistant that helps students in Egypt choose private or international universities and colleges based on their needs."}
+        ]
 
     # Append user message to history
-    session_memory[user_id].append({"role": "user", "parts": [user_input]})
+    session_memory[user_id].append({"role": "user", "content": user_input})
 
     try:
-        # Generate a new chat session with previous history
-        chat_session = model.start_chat(history=session_memory[user_id])
-        response = chat_session.send_message(user_input)
-        answer = response.text.strip()
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",  # or gpt-4 if available
+            messages=session_memory[user_id],
+            temperature=0.7,
+            max_tokens=500
+        )
+        answer = response['choices'][0]['message']['content'].strip()
 
         # Append assistant response to history
-        session_memory[user_id].append({"role": "model", "parts": [answer]})
+        session_memory[user_id].append({"role": "assistant", "content": answer})
 
         # Fallback if the model seems uncertain
         if any(kw in answer.lower() for kw in UNCERTAIN_KEYWORDS):
@@ -76,4 +78,5 @@ def chat():
 # Run the app
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
 
