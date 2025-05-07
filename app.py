@@ -61,6 +61,8 @@ def chat():
 
     except Exception as e:
         print("⚠️ Gemini error:", e)
+        print("🔎 Gemini full response:", gemini_response.text)
+
         fallback_msg = {
             "en": "I'm still learning, so I might not have all the answers yet. But I'm improving every day! 😊",
             "ar": "أنا لسه بتعلم، فممكن تكون في حاجات لسه معرفهاش. بس بوعدك إني بحاول أتحسن كل يوم! 😊"
