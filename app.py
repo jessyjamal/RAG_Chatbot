@@ -5,14 +5,6 @@ from langdetect import detect
 
 app = Flask(__name__)
 
-# === Hugging Face setup ===
-HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/openchat/openchat-3.5-0106"
-HUGGINGFACE_TOKEN = os.environ.get("HF_TOKEN")
-HF_HEADERS = {
-    "Authorization": f"Bearer {HUGGINGFACE_TOKEN}",
-    "Content-Type": "application/json"
-}
-
 # === Gemini setup ===
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
@@ -46,67 +38,34 @@ def chat():
     except:
         lang = "en"
 
-    # === Greetings ===
     if user_input.lower() in ["hi", "hello", "start", "who are you", "introduce yourself", "ابدأ", "مرحبا", "من أنت"]:
         return jsonify({"answer": BOT_INTRO.get(lang, BOT_INTRO["en"])})
 
     if user_id not in session_memory:
-        session_memory[user_id] = [f"System: {SYSTEM_PROMPT}"]
+        session_memory[user_id] = [{"role": "user", "text": SYSTEM_PROMPT}]
 
-    session_memory[user_id].append(f"User: {user_input}")
-    prompt = "\n".join(session_memory[user_id]) + "\nAssistant:"
-    print("🔍 Prompt to HF:\n", prompt)
+    session_memory[user_id].append({"role": "user", "text": user_input})
 
-    generated = None
-
-    # === Step 1: Hugging Face ===
     try:
-        hf_response = requests.post(
-            HUGGINGFACE_API_URL,
-            headers=HF_HEADERS,
-            json={"inputs": prompt},
+        response = requests.post(
+            GEMINI_URL,
+            headers={"Content-Type": "application/json"},
+            json={"contents": session_memory[user_id]},
             timeout=20
         )
-        hf_json = hf_response.json()
-        print("🤖 HF JSON:", hf_json)
-
-        hf_output = hf_json[0]["generated_text"]
-        if "Assistant:" in hf_output:
-            generated = hf_output.split("Assistant:")[-1].strip()
-        else:
-            generated = hf_output[len(prompt):].strip()
-
-        if not generated or len(generated) < 2:
-            raise Exception("Empty response from Hugging Face")
+        response.raise_for_status()
+        gemini_output = response.json()
+        answer = gemini_output["candidates"][0]["content"]["parts"][0]["text"]
+        session_memory[user_id].append({"role": "model", "text": answer})
+        return jsonify({"answer": answer})
 
     except Exception as e:
-        print("⚠️ Hugging Face error:", e)
-
-    # === Step 2: Gemini fallback ===
-    if not generated and GEMINI_API_KEY:
-        try:
-            gemini_response = requests.post(
-                GEMINI_URL,
-                headers={"Content-Type": "application/json"},
-                json={"contents": [{"parts": [{"text": user_input}]}]},
-                timeout=20
-            )
-            gemini_json = gemini_response.json()
-            print("💠 Gemini JSON:", gemini_json)
-            generated = gemini_json["candidates"][0]["content"]["parts"][0]["text"]
-        except Exception as e:
-            print("⚠️ Gemini error:", e)
-
-    # === Step 3: Final fallback
-    if not generated:
+        print("⚠️ Gemini error:", e)
         fallback_msg = {
             "en": "I'm still learning, so I might not have all the answers yet. But I'm improving every day! 😊",
             "ar": "أنا لسه بتعلم، فممكن تكون في حاجات لسه معرفهاش. بس بوعدك إني بحاول أتحسن كل يوم! 😊"
         }
-        generated = fallback_msg.get(lang, fallback_msg["en"])
-
-    session_memory[user_id].append(f"Assistant: {generated}")
-    return jsonify({"answer": generated})
+        return jsonify({"answer": fallback_msg.get(lang, fallback_msg["en"])})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
