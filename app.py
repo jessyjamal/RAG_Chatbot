@@ -4,13 +4,14 @@ from openai import OpenAI
 
 # Load GitHub PAT from environment variables (used on Railway)
 client = OpenAI(
-    base_url="https://models.github.ai/inference",  # Updated GitHub endpoint
-    api_key=os.environ.get("GITHUB_TOKEN"),  # Set in Railway environment variables
+    base_url="https://api.github.ai/v1",
+    api_key=os.environ.get("GITHUB_TOKEN"),
     default_headers={
         "OpenAI-Organization": "github-models",
         "publisher": "azure-openai"
     }
 )
+
 
 app = Flask(__name__)
 
