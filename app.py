@@ -5,9 +5,9 @@ from langdetect import detect
 
 app = Flask(__name__)
 
-# استخدمي النموذج الجديد هنا من Hugging Face
-HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
-HUGGINGFACE_TOKEN = os.environ.get("HF_TOKEN")
+# ✅ استخدم موديل Mistral من Hugging Face
+HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1"
+HUGGINGFACE_TOKEN = os.environ.get("HF_TOKEN")  # تأكد إن التوكين محفوظ في متغير بيئة
 
 headers = {
     "Authorization": f"Bearer {HUGGINGFACE_TOKEN}"
@@ -37,17 +37,14 @@ def chat():
     if not user_id or not user_input:
         return jsonify({"error": "Both 'user_id' and 'question' are required."}), 400
 
-    # Detect language
     try:
         lang = detect(user_input)
     except:
         lang = "en"
 
-    # Bot introduction
     if user_input.lower() in ["hi", "hello", "start", "who are you", "introduce yourself", "ابدأ", "مرحبا", "من أنت"]:
         return jsonify({"answer": BOT_INTRO.get(lang, BOT_INTRO["en"])})
 
-    # Init session
     if user_id not in session_memory:
         session_memory[user_id] = []
 
@@ -77,6 +74,7 @@ def chat():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
 
 
 
