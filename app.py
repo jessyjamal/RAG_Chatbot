@@ -1,11 +1,15 @@
 import os
 from flask import Flask, request, jsonify
-from openai import OpenAI  # From OpenAI SDK v1
+from openai import OpenAI
 
-# Setup GitHub AI Model (o4-mini or gpt-4o)
+# Initialize GitHub Marketplace LLM (o4-mini)
 client = OpenAI(
-    base_url="https://models.github.ai/inference",  # GitHub model inference URL
-    api_key=os.environ.get("GITHUB_TOKEN")  # Set your GitHub token as an environment variable
+    base_url="https://api.github.ai/v1",  # GitHub Models endpoint
+    api_key=os.environ.get("GITHUB_TOKEN"),  # Set this token in environment variables
+    default_headers={
+        "OpenAI-Organization": "github-models",
+        "publisher": "azure-openai"
+    }
 )
 
 app = Flask(__name__)
@@ -17,16 +21,16 @@ BOT_INTRO = (
     "You can ask me about tuition fees, programs, admission requirements, and more. Just type your question!"
 )
 
-# Keywords used to detect uncertainty in the model's answer
+# List of uncertain response indicators
 UNCERTAIN_KEYWORDS = [
     "i'm not sure", "i cannot", "i don't know", "there is no clear answer",
     "it depends", "unfortunately", "i'm unable", "i cannot provide a specific answer"
 ]
 
-# In-memory session tracking
+# In-memory session per user
 session_memory = {}
 
-# Check if text contains Arabic characters
+# Check if the message is Arabic
 def is_arabic(text):
     return any('\u0600' <= ch <= '\u06FF' for ch in text)
 
@@ -39,32 +43,29 @@ def chat():
     if not user_id or not user_input:
         return jsonify({"error": "Both 'user_id' and 'question' are required."}), 400
 
-    # Intro message on greeting or basic questions
     if user_input.lower() in ["hi", "hello", "start", "who are you", "introduce yourself"]:
         return jsonify({"answer": BOT_INTRO})
 
-    # Create a memory for new users
+    # Initialize session history
     if user_id not in session_memory:
         session_memory[user_id] = []
 
     session_memory[user_id].append({"role": "user", "content": user_input})
 
     try:
-        # Send the message to GitHub's GPT model
         response = client.chat.completions.create(
-            model="gpt-4o",  # You can change to "o4-mini" if needed
+            model="o4-mini",  # Make sure this matches your GitHub Marketplace model name
             messages=session_memory[user_id]
         )
 
         answer = response.choices[0].message.content.strip()
         session_memory[user_id].append({"role": "assistant", "content": answer})
 
-        # Fallback message if the answer is uncertain
-        if any(kw in answer.lower() for kw in UNCERTAIN_KEYWORDS):
+        if any(keyword in answer.lower() for keyword in UNCERTAIN_KEYWORDS):
             fallback_msg = (
-                "I'm still learning, so I'm not completely sure about that. Please try rephrasing your question or check the official website of the university."
-                if not is_arabic(user_input)
-                else "لسه بتعلم، فمش متأكد من الإجابة دي. جرّب تعيد صياغة سؤالك أو شوف موقع الجامعة الرسمي."
+                "لسه بتعلم، فمش متأكد من الإجابة دي. جرّب تعيد صياغة سؤالك أو شوف موقع الجامعة الرسمي."
+                if is_arabic(user_input)
+                else "I'm still learning, so I'm not completely sure about that. Please try rephrasing your question or check the official university website."
             )
             return jsonify({"answer": fallback_msg})
 
@@ -75,5 +76,3 @@ def chat():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
-
