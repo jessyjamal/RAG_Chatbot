@@ -2,6 +2,7 @@ import os
 from flask import Flask, request, jsonify
 import requests
 from langdetect import detect
+import re
 
 app = Flask(__name__)
 
@@ -26,6 +27,16 @@ BOT_INTRO = {
 # === Memory ===
 session_memory = {}
 
+def clean_markdown(text):
+    """Function to clean markdown and unwanted symbols"""
+    # Remove markdown formatting
+    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)  # **bold**
+    text = re.sub(r"\*(.*?)\*", r"\1", text)      # *italic*
+    text = re.sub(r"`{1,3}(.*?)`{1,3}", r"\1", text)  # `code`
+    text = re.sub(r"#+ ", "", text)  # Remove headers like ### Title
+    text = re.sub(r"[-•>]", "", text)  # Remove bullet symbols
+    return text.strip()
+
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json()
@@ -40,7 +51,7 @@ def chat():
     except:
         lang = "en"
 
-    if user_input.lower() in ["hi", "hello", "start", "who are you", "introduce yourself", "ابدأ", "مرحبا", "من أنت","ازيك","هاي","توفي"]:
+    if user_input.lower() in ["hi", "hello", "start", "who are you", "introduce yourself", "ابدأ", "مرحبا", "من أنت", "ازيك", "هاي", "توفي"]:
         return jsonify({"answer": BOT_INTRO.get(lang, BOT_INTRO["en"])})
 
     # Initialize memory if not exists
@@ -68,15 +79,17 @@ def chat():
         response.raise_for_status()
         output = response.json()
         answer = output["choices"][0]["message"]["content"]
-        session_memory[user_id].append({"role": "assistant", "content": answer})
-        return jsonify({"answer": answer})
+
+        # Clean the response if it has unwanted formatting
+        cleaned_answer = clean_markdown(answer)
+        
+        session_memory[user_id].append({"role": "assistant", "content": cleaned_answer})
+        return jsonify({"answer": cleaned_answer})
 
     except Exception as e:
-    
         print("⚠️ OpenRouter Error:", str(e))
         if hasattr(e, 'response') and e.response is not None:
             print("📥 Raw response content:", e.response.text)
-
 
         fallback_msg = {
             "en": "I'm still learning, so I might not have all the answers yet. But I'm improving every day! 😊",
@@ -86,3 +99,4 @@ def chat():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
+
