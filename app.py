@@ -71,8 +71,11 @@ def chat():
         return jsonify({"answer": answer})
 
     except Exception as e:
+    
         print("⚠️ OpenRouter Error:", str(e))
-        print("📥 Raw response:", getattr(e, 'response', None))
+        if hasattr(e, 'response') and e.response is not None:
+            print("📥 Raw response content:", e.response.text)
+
 
         fallback_msg = {
             "en": "I'm still learning, so I might not have all the answers yet. But I'm improving every day! 😊",
