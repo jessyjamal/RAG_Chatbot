@@ -11,7 +11,6 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODEL = "deepseek/deepseek-chat:free"
 
-
 # === Bot prompts ===
 SYSTEM_PROMPT = (
     "You are Tofy 🤖, an educational assistant specialized in helping students find and compare private or international universities and colleges in Egypt. "
@@ -36,6 +35,13 @@ def clean_markdown(text):
     text = re.sub(r"#+ ", "", text)  # Remove headers like ### Title
     text = re.sub(r"[-•>]", "", text)  # Remove bullet symbols
     return text.strip()
+
+def format_response(response):
+    """Function to format the response by adding line breaks between universities or colleges"""
+    # Example: assume response contains bullet points or separators between universities (e.g., '•' or '\n')
+    formatted_response = response.replace("•", "\n\n")  # Adding line breaks after each '•'
+    formatted_response = re.sub(r"\n+", "\n\n", formatted_response)  # Remove excessive newlines
+    return formatted_response.strip()
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -83,8 +89,11 @@ def chat():
         # Clean the response if it has unwanted formatting
         cleaned_answer = clean_markdown(answer)
         
-        session_memory[user_id].append({"role": "assistant", "content": cleaned_answer})
-        return jsonify({"answer": cleaned_answer})
+        # Format the response with line breaks
+        formatted_answer = format_response(cleaned_answer)
+        
+        session_memory[user_id].append({"role": "assistant", "content": formatted_answer})
+        return jsonify({"answer": formatted_answer})
 
     except Exception as e:
         print("⚠️ OpenRouter Error:", str(e))
@@ -99,4 +108,5 @@ def chat():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
+
 
