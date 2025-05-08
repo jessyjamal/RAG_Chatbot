@@ -8,7 +8,7 @@ app = Flask(__name__)
 # === OpenRouter setup ===
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_MODEL = "deepseek/deepseek-r1:free"
+OPENROUTER_MODEL = "deepseek/deepseek-coder:free"
 
 # === Bot prompts ===
 SYSTEM_PROMPT = (
@@ -42,6 +42,7 @@ def chat():
     if user_input.lower() in ["hi", "hello", "start", "who are you", "introduce yourself", "ابدأ", "مرحبا", "من أنت"]:
         return jsonify({"answer": BOT_INTRO.get(lang, BOT_INTRO["en"])})
 
+    # Initialize memory if not exists
     if user_id not in session_memory:
         session_memory[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
@@ -49,12 +50,12 @@ def chat():
 
     try:
         response = requests.post(
-            OPENROUTER_URL,
+            url=OPENROUTER_URL,
             headers={
                 "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                 "Content-Type": "application/json",
-                "HTTP-Referer": "https://your-site.com",  # اختياري، ممكن تعدله أو تمسحه
-                "X-Title": "TofyBot",  # اختياري، اسم مشروعك
+                "HTTP-Referer": "https://yourapp.com",  # اختياري
+                "X-Title": "TofyChatbot"  # اختياري
             },
             json={
                 "model": OPENROUTER_MODEL,
@@ -62,14 +63,17 @@ def chat():
             },
             timeout=20
         )
+
         response.raise_for_status()
-        result = response.json()
-        answer = result["choices"][0]["message"]["content"]
+        output = response.json()
+        answer = output["choices"][0]["message"]["content"]
         session_memory[user_id].append({"role": "assistant", "content": answer})
         return jsonify({"answer": answer})
 
     except Exception as e:
-        print("⚠️ OpenRouter error:", e)
+        print("⚠️ OpenRouter Error:", str(e))
+        print("📥 Raw response:", getattr(e, 'response', None))
+
         fallback_msg = {
             "en": "I'm still learning, so I might not have all the answers yet. But I'm improving every day! 😊",
             "ar": "أنا لسه بتعلم، فممكن تكون في حاجات لسه معرفهاش. بس بوعدك إني بحاول أتحسن كل يوم! 😊"
@@ -77,4 +81,4 @@ def chat():
         return jsonify({"answer": fallback_msg.get(lang, fallback_msg["en"])})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
