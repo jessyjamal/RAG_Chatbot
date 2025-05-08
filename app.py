@@ -5,9 +5,10 @@ from langdetect import detect
 
 app = Flask(__name__)
 
-# === Gemini setup ===
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
+# === OpenRouter setup ===
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODEL = "deepseek/deepseek-r1:free"
 
 # === Bot prompts ===
 SYSTEM_PROMPT = (
@@ -42,27 +43,33 @@ def chat():
         return jsonify({"answer": BOT_INTRO.get(lang, BOT_INTRO["en"])})
 
     if user_id not in session_memory:
-        session_memory[user_id] = [{"role": "user", "text": SYSTEM_PROMPT}]
+        session_memory[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    session_memory[user_id].append({"role": "user", "text": user_input})
+    session_memory[user_id].append({"role": "user", "content": user_input})
 
     try:
         response = requests.post(
-            GEMINI_URL,
-            headers={"Content-Type": "application/json"},
-            json={"contents": session_memory[user_id]},
+            OPENROUTER_URL,
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://your-site.com",  # اختياري، ممكن تعدله أو تمسحه
+                "X-Title": "TofyBot",  # اختياري، اسم مشروعك
+            },
+            json={
+                "model": OPENROUTER_MODEL,
+                "messages": session_memory[user_id]
+            },
             timeout=20
         )
         response.raise_for_status()
-        gemini_output = response.json()
-        answer = gemini_output["candidates"][0]["content"]["parts"][0]["text"]
-        session_memory[user_id].append({"role": "model", "text": answer})
+        result = response.json()
+        answer = result["choices"][0]["message"]["content"]
+        session_memory[user_id].append({"role": "assistant", "content": answer})
         return jsonify({"answer": answer})
 
     except Exception as e:
-        print("⚠️ Gemini error:", e)
-        print("🔎 Gemini full response:", gemini_response.text)
-
+        print("⚠️ OpenRouter error:", e)
         fallback_msg = {
             "en": "I'm still learning, so I might not have all the answers yet. But I'm improving every day! 😊",
             "ar": "أنا لسه بتعلم، فممكن تكون في حاجات لسه معرفهاش. بس بوعدك إني بحاول أتحسن كل يوم! 😊"
