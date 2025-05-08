@@ -40,7 +40,7 @@ def chat():
     except:
         lang = "en"
 
-    if user_input.lower() in ["hi", "hello", "start", "who are you", "introduce yourself", "ابدأ", "مرحبا", "من أنت","ازيك","هاي"]:
+    if user_input.lower() in ["hi", "hello", "start", "who are you", "introduce yourself", "ابدأ", "مرحبا", "من أنت","ازيك","هاي","توفي"]:
         return jsonify({"answer": BOT_INTRO.get(lang, BOT_INTRO["en"])})
 
     # Initialize memory if not exists
