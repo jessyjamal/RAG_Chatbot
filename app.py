@@ -1,16 +1,16 @@
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response, stream_with_context
 import requests
 from langdetect import detect
 import re
+import json
 
 app = Flask(__name__)
 
 # === OpenRouter setup ===
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_MODEL = "mistralai/mistral-7b-instruct:free"
-
+OPENROUTER_MODEL = "mistralai/mistral-7b-instruct:free"  
 
 # === Bot prompts ===
 SYSTEM_PROMPT = (
@@ -28,20 +28,16 @@ BOT_INTRO = {
 session_memory = {}
 
 def clean_markdown(text):
-    """Function to clean markdown and unwanted symbols"""
-    # Remove markdown formatting
-    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)  # **bold**
-    text = re.sub(r"\*(.*?)\*", r"\1", text)      # *italic*
-    text = re.sub(r"`{1,3}(.*?)`{1,3}", r"\1", text)  # `code`
-    text = re.sub(r"#+ ", "", text)  # Remove headers like ### Title
-    text = re.sub(r"[-•>]", "", text)  # Remove bullet symbols
+    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
+    text = re.sub(r"\*(.*?)\*", r"\1", text)
+    text = re.sub(r"`{1,3}(.*?)`{1,3}", r"\1", text)
+    text = re.sub(r"#+ ", "", text)
+    text = re.sub(r"[-•>]", "", text)
     return text.strip()
 
 def format_response(response):
-    """Function to format the response by adding line breaks between universities or colleges"""
-    # Example: assume response contains bullet points or separators between universities (e.g., '•' or '\n')
-    formatted_response = response.replace("•", "\n\n")  # Adding line breaks after each '•'
-    formatted_response = re.sub(r"\n+", "\n\n", formatted_response)  # Remove excessive newlines
+    formatted_response = response.replace("•", "\n\n")
+    formatted_response = re.sub(r"\n+", "\n\n", formatted_response)
     return formatted_response.strip()
 
 @app.route("/chat", methods=["POST"])
@@ -58,56 +54,57 @@ def chat():
     except:
         lang = "en"
 
-    if user_input.lower() in ["hi", "hello", "start", "who are you", "introduce yourself", "ابدأ", "مرحبا", "من أنت", "ازيك", "هاي", "توفي","هاي توفي"]:
+    if user_input.lower() in ["hi", "hello", "start", "who are you", "introduce yourself", "ابدأ", "مرحبا", "من أنت", "ازيك", "هاي", "توفي", "هاي توفي"]:
         return jsonify({"answer": BOT_INTRO.get(lang, BOT_INTRO["en"])})
 
-    # Initialize memory if not exists
     if user_id not in session_memory:
         session_memory[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     session_memory[user_id].append({"role": "user", "content": user_input})
 
-    try:
-        response = requests.post(
-            url=OPENROUTER_URL,
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://yourapp.com",  # اختياري
-                "X-Title": "TofyChatbot"  # اختياري
-            },
-            json={
-                "model": OPENROUTER_MODEL,
-                "messages": session_memory[user_id]
-            },
-            timeout=20
-        )
+    def generate():
+        try:
+            with requests.post(
+                url=OPENROUTER_URL,
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://yourapp.com",
+                    "X-Title": "TofyChatbot"
+                },
+                json={
+                    "model": OPENROUTER_MODEL,
+                    "messages": session_memory[user_id],
+                    "stream": True
+                },
+                stream=True,
+                timeout=60
+            ) as response:
+                collected = ""
+                for line in response.iter_lines():
+                    if line and line.startswith(b"data: "):
+                        payload = line.decode("utf-8").replace("data: ", "")
+                        if payload.strip() == "[DONE]":
+                            break
+                        try:
+                            delta = json.loads(payload)
+                            chunk = delta["choices"][0]["delta"].get("content", "")
+                            collected += chunk
+                            yield chunk
+                        except Exception:
+                            continue
 
-        response.raise_for_status()
-        output = response.json()
-        answer = output["choices"][0]["message"]["content"]
+                cleaned = clean_markdown(collected)
+                formatted = format_response(cleaned)
+                session_memory[user_id].append({"role": "assistant", "content": formatted})
 
-        # Clean the response if it has unwanted formatting
-        cleaned_answer = clean_markdown(answer)
-        
-        # Format the response with line breaks
-        formatted_answer = format_response(cleaned_answer)
-        
-        session_memory[user_id].append({"role": "assistant", "content": formatted_answer})
-        return jsonify({"answer": formatted_answer})
+        except Exception as e:
+            yield "\n⚠️ حصل خطأ أثناء جلب الرد."
 
-    except Exception as e:
-        print("⚠️ OpenRouter Error:", str(e))
-        if hasattr(e, 'response') and e.response is not None:
-            print("📥 Raw response content:", e.response.text)
-
-        fallback_msg = {
-            "en": "I'm still learning, so I might not have all the answers yet. But I'm improving every day! 😊",
-            "ar": "أنا لسه بتعلم، فممكن تكون في حاجات لسه معرفهاش. بس بوعدك إني بحاول أتحسن كل يوم! 😊"
-        }
-        return jsonify({"answer": fallback_msg.get(lang, fallback_msg["en"])})
+    return Response(stream_with_context(generate()), content_type="text/plain")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
+
 
 
