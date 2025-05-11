@@ -1,16 +1,18 @@
 import os
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 import requests
 from langdetect import detect
 from deep_translator import GoogleTranslator
 import re
 
-app = Flask(__name__)
+app = FastAPI()
 
 # === OpenRouter setup ===
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_MODEL = "mistralai/mistral-7b-instruct:free"
+OPENROUTER_MODEL = "deepseek/deepseek-chat:free"
 
 # === Bot prompts ===
 SYSTEM_PROMPT = (
@@ -27,48 +29,52 @@ BOT_INTRO = {
 # === Memory ===
 session_memory = {}
 
+class ChatRequest(BaseModel):
+    user_id: str
+    question: str
+
 def clean_markdown(text):
     text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
     text = re.sub(r"\*(.*?)\*", r"\1", text)
     text = re.sub(r"`{1,3}(.*?)`{1,3}", r"\1", text)
     text = re.sub(r"#+ ", "", text)
-    text = re.sub(r"[-•>]", "", text)
+    text = re.sub(r"[-\u2022>]", "", text)
     return text.strip()
 
 def format_response(response):
-    formatted_response = response.replace("•", "\n\n")
+    formatted_response = response.replace("\u2022", "\n\n")
     formatted_response = re.sub(r"\n+", "\n\n", formatted_response)
     return formatted_response.strip()
 
-@app.route("/chat", methods=["POST"])
-def chat():
-    data = request.get_json()
-    user_id = data.get("user_id")
-    user_input = data.get("question", "").strip()
+@app.post("/chat")
+async def chat(request: ChatRequest):
+    user_id = request.user_id
+    user_input = request.question.strip()
 
     if not user_id or not user_input:
-        return jsonify({"error": "Both 'user_id' and 'question' are required."}), 400
+        return JSONResponse(status_code=400, content={"error": "Both 'user_id' and 'question' are required."})
 
     try:
         lang = detect(user_input)
     except:
         lang = "en"
 
-    if user_input.lower() in ["hi", "hello", "start", "who are you", "introduce yourself", "ابدأ", "مرحبا", "من أنت", "ازيك", "هاي", "توفي", "هاي توفي"]:
-        return jsonify({"answer": BOT_INTRO.get(lang, BOT_INTRO["en"])})
+    if user_input.lower() in [
+        "hi", "hello", "start", "who are you", "introduce yourself", "ابدأ", "مرحبا",
+        "من أنت", "ازيك", "هاي", "توفي", "هاي توفي"]:
+        return {"answer": BOT_INTRO.get(lang, BOT_INTRO["en"])}
 
     if user_id not in session_memory:
         session_memory[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    original_question = user_input
-
+    translated_input = user_input
     if lang == "ar":
         try:
-            user_input = GoogleTranslator(source='ar', target='en').translate(user_input)
+            translated_input = GoogleTranslator(source='ar', target='en').translate(user_input)
         except:
             pass
 
-    session_memory[user_id].append({"role": "user", "content": user_input})
+    session_memory[user_id].append({"role": "user", "content": translated_input})
 
     try:
         response = requests.post(
@@ -101,7 +107,7 @@ def chat():
                 pass
 
         session_memory[user_id].append({"role": "assistant", "content": formatted_answer})
-        return jsonify({"answer": formatted_answer})
+        return {"answer": formatted_answer}
 
     except Exception as e:
         print("⚠️ OpenRouter Error:", str(e))
@@ -109,8 +115,6 @@ def chat():
             "en": "I'm still learning, so I might not have all the answers yet. But I'm improving every day! 😊",
             "ar": "أنا لسه بتعلم، فممكن تكون في حاجات لسه معرفهاش. بس بوعدك إني بحاول أتحسن كل يوم! 😊"
         }
-        return jsonify({"answer": fallback_msg.get(lang, fallback_msg["en"])})
+        return {"answer": fallback_msg.get(lang, fallback_msg["en"])}
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
 
