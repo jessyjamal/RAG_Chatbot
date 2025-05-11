@@ -9,7 +9,8 @@ app = Flask(__name__)
 # === OpenRouter setup ===
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_MODEL = "deepseek/deepseek-chat:free"
+OPENROUTER_MODEL = "mistralai/mistral-7b-instruct:free"
+
 
 # === Bot prompts ===
 SYSTEM_PROMPT = (
