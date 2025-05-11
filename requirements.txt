@@ -2,6 +2,8 @@ Flask
 requests
 gunicorn
 langdetect
+deep-translator
+
 
 
 
