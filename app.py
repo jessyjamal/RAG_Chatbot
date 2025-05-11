@@ -10,7 +10,7 @@ app = Flask(__name__)
 # === OpenRouter setup ===
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_MODEL = "mistralai/mistral-7b-instruct:free"  # حطينا الموديل اللي اخترتيه
+OPENROUTER_MODEL = "mistralai/mistral-7b-instruct:free"
 
 # === Bot prompts ===
 SYSTEM_PROMPT = (
@@ -35,10 +35,10 @@ def clean_markdown(text):
     text = re.sub(r"[-•>]", "", text)
     return text.strip()
 
-def format_response(text):
-    text = text.replace("•", "\n\n")
-    text = re.sub(r"\n+", "\n\n", text)
-    return text.strip()
+def format_response(response):
+    formatted_response = response.replace("•", "\n\n")
+    formatted_response = re.sub(r"\n+", "\n\n", formatted_response)
+    return formatted_response.strip()
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -54,13 +54,19 @@ def chat():
     except:
         lang = "en"
 
-    is_arabic = lang == "ar"
-
-    if user_input.lower() in ["hi", "hello", "start", "who are you", "introduce yourself", "ابدأ", "مرحبا", "من أنت", "ازيك", "هاي", "توفي","هاي توفي"]:
+    if user_input.lower() in ["hi", "hello", "start", "who are you", "introduce yourself", "ابدأ", "مرحبا", "من أنت", "ازيك", "هاي", "توفي", "هاي توفي"]:
         return jsonify({"answer": BOT_INTRO.get(lang, BOT_INTRO["en"])})
 
     if user_id not in session_memory:
         session_memory[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    original_question = user_input
+
+    if lang == "ar":
+        try:
+            user_input = GoogleTranslator(source='ar', target='en').translate(user_input)
+        except:
+            pass
 
     session_memory[user_id].append({"role": "user", "content": user_input})
 
@@ -82,24 +88,23 @@ def chat():
 
         response.raise_for_status()
         output = response.json()
-        model_reply = output["choices"][0]["message"]["content"]
+        answer = output["choices"][0]["message"]["content"]
 
-        cleaned_reply = clean_markdown(model_reply)
-        formatted_reply = format_response(cleaned_reply)
+        cleaned_answer = clean_markdown(answer)
+        formatted_answer = format_response(cleaned_answer)
 
-        session_memory[user_id].append({"role": "assistant", "content": formatted_reply})
+        if lang == "ar":
+            try:
+                translated = GoogleTranslator(source='en', target='ar').translate(formatted_answer)
+                formatted_answer = translated
+            except:
+                pass
 
-        if is_arabic:
-            translated = GoogleTranslator(source='auto', target='ar').translate(formatted_reply)
-            return jsonify({"answer": translated})
-        else:
-            return jsonify({"answer": formatted_reply})
+        session_memory[user_id].append({"role": "assistant", "content": formatted_answer})
+        return jsonify({"answer": formatted_answer})
 
     except Exception as e:
         print("⚠️ OpenRouter Error:", str(e))
-        if hasattr(e, 'response') and e.response is not None:
-            print("📥 Raw response content:", e.response.text)
-
         fallback_msg = {
             "en": "I'm still learning, so I might not have all the answers yet. But I'm improving every day! 😊",
             "ar": "أنا لسه بتعلم، فممكن تكون في حاجات لسه معرفهاش. بس بوعدك إني بحاول أتحسن كل يوم! 😊"
