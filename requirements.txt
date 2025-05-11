@@ -1,6 +1,6 @@
-Flask
+fastapi
+uvicorn
 requests
-gunicorn
 langdetect
 deep-translator
 
