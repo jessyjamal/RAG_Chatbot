@@ -4,7 +4,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import requests
 from langdetect import detect
-from deep_translator import GoogleTranslator
 import re
 
 app = FastAPI()
@@ -38,7 +37,7 @@ def clean_markdown(text):
     text = re.sub(r"\*(.*?)\*", r"\1", text)
     text = re.sub(r"`{1,3}(.*?)`{1,3}", r"\1", text)
     text = re.sub(r"#+ ", "", text)
-    text = re.sub(r"[-\u2022>]", "", text)
+    text = re.sub(r"[-•>]", "", text)
     return text.strip()
 
 def format_response(response):
@@ -65,16 +64,17 @@ async def chat(request: ChatRequest):
         return {"answer": BOT_INTRO.get(lang, BOT_INTRO["en"])}
 
     if user_id not in session_memory:
-        session_memory[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        if lang == "ar":
+            system_prompt = (
+                "أنت توفي 🤖، مساعد ذكي متخصص في تقديم المساعدة للطلاب بشأن الجامعات والكليات الخاصة والدولية في مصر، "
+                "بما في ذلك المصروفات، التخصصات، وشروط القبول. أجب دائمًا باللغة العربية فقط."
+            )
+        else:
+            system_prompt = SYSTEM_PROMPT
 
-    translated_input = user_input
-    if lang == "ar":
-        try:
-            translated_input = GoogleTranslator(source='ar', target='en').translate(user_input)
-        except:
-            pass
+        session_memory[user_id] = [{"role": "system", "content": system_prompt}]
 
-    session_memory[user_id].append({"role": "user", "content": translated_input})
+    session_memory[user_id].append({"role": "user", "content": user_input})
 
     try:
         response = requests.post(
@@ -99,22 +99,16 @@ async def chat(request: ChatRequest):
         cleaned_answer = clean_markdown(answer)
         formatted_answer = format_response(cleaned_answer)
 
-        if lang == "ar":
-            try:
-                translated = GoogleTranslator(source='en', target='ar').translate(formatted_answer)
-                formatted_answer = translated
-            except:
-                pass
-
         session_memory[user_id].append({"role": "assistant", "content": formatted_answer})
         return {"answer": formatted_answer}
 
     except Exception as e:
-        print("⚠️ OpenRouter Error:", str(e))
+        print("\u26a0\ufe0f OpenRouter Error:", str(e))
         fallback_msg = {
             "en": "I'm still learning, so I might not have all the answers yet. But I'm improving every day! 😊",
             "ar": "أنا لسه بتعلم، فممكن تكون في حاجات لسه معرفهاش. بس بوعدك إني بحاول أتحسن كل يوم! 😊"
         }
         return {"answer": fallback_msg.get(lang, fallback_msg["en"])}
+
 
 
